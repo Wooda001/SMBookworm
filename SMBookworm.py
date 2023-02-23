@@ -48,7 +48,9 @@ for ip in ips:
             # Check if the share is accessible
             os.listdir(share_path)
             # Download all files in the share
-            subprocess.call(["smbclient", "//{}/{}/".format(ip, share_name), "-c", "prompt off;recurse;lcd /tmp/;mget *"])
+            smbclient_command = ["smbclient", "//{}/{}".format(ip, share_name), "-c", "prompt off;recurse;lcd /tmp/;mget *"]
+            subprocess.call(smbclient_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            shell=False, encoding="utf-8", errors="ignore", username=args.username, password=args.password)
             # Check each file for passwords and hashes
             files = os.listdir("/tmp/")
             for file_name in files:
