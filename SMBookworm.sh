@@ -15,6 +15,9 @@ pfx_pattern="(.*\.pfx)"
 # Regex to match potential RSA keys
 rsa_pattern="(.*\.key)"
 
+# Maximum data size in GB
+max_size=5
+
 # Parse command line arguments
 if [[ $# -ne 3 ]]; then
     echo "Usage: $0 ip username password"
@@ -49,7 +52,20 @@ for ip in "${ips[@]}"; do
     for share_name in "${share_names[@]}"; do
         share_path="//$ip/$share_name"
         # Check if the share is accessible
-        if smbclient $share_path -c 'prompt off;recurse;lcd /tmp/;mget *' -U $username%$password > /dev/null 2>&1; then
+        if smbclient $share_path -c 'du' -U $username%$password > /dev/null 2>&1; then
+            # Check the size of the share
+            size=$(smbclient $share_path -c 'du' -U $username%$password | awk '{print $1}')
+            if [[ -n $size ]] && (( size > max_size * 1024 )); then
+                echo "Size of $share_name is greater than $max_size GB, only inspecting the first $max_size GB of data."
+                smbclient_command=("smbclient" "$share_path" "-c" "prompt off;recurse;lcd /tmp/;mget *" "-U" "$username%$password")
+                # Use dd to limit the amount of transferred data
+                dd_command=("dd" "if=$($smbclient_command)" "of=/dev/null" "bs=1M" "count=$((max_size * 1024))")
+                eval "$dd_command"
+            else
+                smbclient_command=("smbclient" "$share_path" "-c" "prompt off;recurse;lcd /tmp/;mget *" "-U" "$username%$password")
+                eval "$smbclient_command"
+            fi
+            
             # Check each file for passwords and hashes
             for file in /tmp/*; do
                 while IFS= read -r line; do
